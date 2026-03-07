@@ -96,7 +96,6 @@ export default function DriversPage() {
             is_active: driver.is_active,
         });
 
-        window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
     async function handleToggle(id: number) {
