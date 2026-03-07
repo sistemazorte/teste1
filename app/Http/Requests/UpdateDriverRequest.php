@@ -42,7 +42,7 @@ class UpdateDriverRequest extends FormRequest
                 'regex:/^\d{3}\.\d{3}\.\d{3}\-\d{2}$/',
                 Rule::unique('drivers', 'cpf')->ignore($driverId),
             ],
-            'cnh_category' => ['required', Rule::in(['C', 'D', 'E'])],
+            'cnh_category' => ['required', Rule::in(['A', 'B', 'C', 'D', 'E'])],
             'phone' => ['nullable', 'digits_between:10,15'],
             'is_active' => ['nullable', 'boolean'],
         ];
@@ -57,7 +57,7 @@ class UpdateDriverRequest extends FormRequest
             'cpf.regex' => 'O CPF deve estar no formato 000.000.000-00.',
             'cpf.unique' => 'Este CPF já está cadastrado.',
             'cnh_category.required' => 'A categoria da CNH é obrigatória.',
-            'cnh_category.in' => 'A categoria da CNH deve ser C, D ou E.',
+            'cnh_category.in' => 'A categoria da CNH deve ser A, B, C, D ou E.',
             'phone.digits_between' => 'O telefone deve ter entre 10 e 15 dígitos.',
         ];
     }

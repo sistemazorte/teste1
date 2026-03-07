@@ -80,8 +80,8 @@ function validateForm(data: DriverFormData): FormErrors {
         errors.cpf = "O CPF deve ter exatamente 11 números.";
     }
 
-    if (!["C", "D", "E"].includes(data.cnh_category)) {
-        errors.cnh_category = "A categoria da CNH deve ser C, D ou E.";
+    if (!["A", "B", "C", "D", "E"].includes(data.cnh_category)) {
+        errors.cnh_category = "A categoria da CNH deve ser A, B, C, D ou E.";
     }
 
     if (data.phone.trim() && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
@@ -304,11 +304,10 @@ export default function DriversPage() {
                                     value={formData.name}
                                     onChange={handleChange}
                                     required
-                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
-                                        errors.name
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${errors.name
                                             ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                                             : "border-slate-200 focus:border-red-400 focus:ring-red-100"
-                                    }`}
+                                        }`}
                                 />
                                 {errors.name && (
                                     <p className="mt-2 text-sm text-red-500">{errors.name}</p>
@@ -330,11 +329,10 @@ export default function DriversPage() {
                                     value={formData.cpf}
                                     onChange={handleChange}
                                     required
-                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
-                                        errors.cpf
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${errors.cpf
                                             ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                                             : "border-slate-200 focus:border-red-400 focus:ring-red-100"
-                                    }`}
+                                        }`}
                                 />
                                 {errors.cpf && (
                                     <p className="mt-2 text-sm text-red-500">{errors.cpf}</p>
@@ -354,12 +352,13 @@ export default function DriversPage() {
                                     value={formData.cnh_category}
                                     onChange={handleChange}
                                     required
-                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
-                                        errors.cnh_category
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${errors.cnh_category
                                             ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                                             : "border-slate-200 focus:border-red-400 focus:ring-red-100"
-                                    }`}
+                                        }`}
                                 >
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
                                     <option value="C">C</option>
                                     <option value="D">D</option>
                                     <option value="E">E</option>
@@ -385,11 +384,10 @@ export default function DriversPage() {
                                     placeholder="(11) 99999-9999"
                                     value={formData.phone}
                                     onChange={handleChange}
-                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
-                                        errors.phone
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${errors.phone
                                             ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                                             : "border-slate-200 focus:border-red-400 focus:ring-red-100"
-                                    }`}
+                                        }`}
                                 />
                                 {errors.phone && (
                                     <p className="mt-2 text-sm text-red-500">{errors.phone}</p>
@@ -416,8 +414,8 @@ export default function DriversPage() {
                                     {isSubmitting
                                         ? "Salvando..."
                                         : editingDriverId
-                                          ? "Atualizar motorista"
-                                          : "Cadastrar motorista"}
+                                            ? "Atualizar motorista"
+                                            : "Cadastrar motorista"}
                                 </button>
 
                                 {editingDriverId && (
@@ -503,11 +501,10 @@ export default function DriversPage() {
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <span
-                                                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                                                            driver.is_active
+                                                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${driver.is_active
                                                                 ? "bg-emerald-100 text-emerald-700"
                                                                 : "bg-red-100 text-red-700"
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {driver.is_active ? "Ativo" : "Inativo"}
                                                     </span>
@@ -523,11 +520,10 @@ export default function DriversPage() {
 
                                                         <button
                                                             onClick={() => handleToggle(driver.id)}
-                                                            className={`rounded-lg px-3 py-2 text-xs font-semibold text-white transition ${
-                                                                driver.is_active
+                                                            className={`rounded-lg px-3 py-2 text-xs font-semibold text-white transition ${driver.is_active
                                                                     ? "bg-amber-500 hover:bg-amber-600"
                                                                     : "bg-emerald-500 hover:bg-emerald-600"
-                                                            }`}
+                                                                }`}
                                                         >
                                                             {driver.is_active ? "Inativar" : "Ativar"}
                                                         </button>
