@@ -24,6 +24,14 @@ type DriverFormData = {
     is_active: boolean;
 };
 
+type FormErrors = {
+    name?: string;
+    cpf?: string;
+    cnh_category?: string;
+    phone?: string;
+    general?: string;
+};
+
 const initialFormData: DriverFormData = {
     name: "",
     cpf: "",
@@ -32,6 +40,57 @@ const initialFormData: DriverFormData = {
     is_active: true,
 };
 
+function formatCpf(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+
+    return digits
+        .replace(/^(\d{3})(\d)/, "$1.$2")
+        .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/\.(\d{3})(\d)/, ".$1-$2");
+}
+
+function formatPhone(value: string) {
+    const digits = value.replace(/\D/g, "").slice(0, 11);
+
+    if (digits.length <= 10) {
+        return digits
+            .replace(/^(\d{2})(\d)/, "($1) $2")
+            .replace(/(\d{4})(\d)/, "$1-$2");
+    }
+
+    return digits
+        .replace(/^(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function validateForm(data: DriverFormData): FormErrors {
+    const errors: FormErrors = {};
+    const cpfDigits = data.cpf.replace(/\D/g, "");
+    const phoneDigits = data.phone.replace(/\D/g, "");
+
+    if (!data.name.trim()) {
+        errors.name = "O nome é obrigatório.";
+    } else if (data.name.trim().length < 3) {
+        errors.name = "O nome deve ter pelo menos 3 caracteres.";
+    }
+
+    if (!data.cpf.trim()) {
+        errors.cpf = "O CPF é obrigatório.";
+    } else if (cpfDigits.length !== 11) {
+        errors.cpf = "O CPF deve ter exatamente 11 números.";
+    }
+
+    if (!["C", "D", "E"].includes(data.cnh_category)) {
+        errors.cnh_category = "A categoria da CNH deve ser C, D ou E.";
+    }
+
+    if (data.phone.trim() && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
+        errors.phone = "O telefone deve ter entre 10 e 11 números.";
+    }
+
+    return errors;
+}
+
 export default function DriversPage() {
     const [drivers, setDrivers] = useState<Driver[]>([]);
     const [formData, setFormData] = useState<DriverFormData>(initialFormData);
@@ -39,6 +98,7 @@ export default function DriversPage() {
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [errors, setErrors] = useState<FormErrors>({});
 
     async function loadDrivers() {
         const data = await getDrivers();
@@ -54,23 +114,49 @@ export default function DriversPage() {
     ) {
         const { name, value, type } = event.target;
 
+        let finalValue: string | boolean =
+            type === "checkbox"
+                ? (event.target as HTMLInputElement).checked
+                : value;
+
+        if (name === "cpf" && typeof finalValue === "string") {
+            finalValue = formatCpf(finalValue);
+        }
+
+        if (name === "phone" && typeof finalValue === "string") {
+            finalValue = formatPhone(finalValue);
+        }
+
         setFormData((prev) => ({
             ...prev,
-            [name]:
-                type === "checkbox"
-                    ? (event.target as HTMLInputElement).checked
-                    : value,
+            [name]: finalValue,
+        }));
+
+        setErrors((prev) => ({
+            ...prev,
+            [name]: "",
+            general: "",
         }));
     }
 
     function resetForm() {
         setFormData(initialFormData);
         setEditingDriverId(null);
+        setErrors({});
     }
 
     async function handleSubmit(event: FormEvent) {
         event.preventDefault();
+
+        const validationErrors = validateForm(formData);
+
+        if (Object.keys(validationErrors).length > 0) {
+            setErrors(validationErrors);
+            return;
+        }
+
         setIsSubmitting(true);
+        setErrors({});
 
         try {
             if (editingDriverId) {
@@ -81,6 +167,10 @@ export default function DriversPage() {
 
             resetForm();
             await loadDrivers();
+        } catch {
+            setErrors({
+                general: "Não foi possível salvar o motorista. Verifique os dados e tente novamente.",
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -95,7 +185,7 @@ export default function DriversPage() {
             phone: driver.phone ?? "",
             is_active: driver.is_active,
         });
-
+        setErrors({});
     }
 
     async function handleToggle(id: number) {
@@ -193,6 +283,12 @@ export default function DriversPage() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            {errors.general && (
+                                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                                    {errors.general}
+                                </div>
+                            )}
+
                             <div>
                                 <label
                                     htmlFor="name"
@@ -208,8 +304,15 @@ export default function DriversPage() {
                                     value={formData.name}
                                     onChange={handleChange}
                                     required
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
+                                        errors.name
+                                            ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                                            : "border-slate-200 focus:border-red-400 focus:ring-red-100"
+                                    }`}
                                 />
+                                {errors.name && (
+                                    <p className="mt-2 text-sm text-red-500">{errors.name}</p>
+                                )}
                             </div>
 
                             <div>
@@ -227,8 +330,15 @@ export default function DriversPage() {
                                     value={formData.cpf}
                                     onChange={handleChange}
                                     required
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
+                                        errors.cpf
+                                            ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                                            : "border-slate-200 focus:border-red-400 focus:ring-red-100"
+                                    }`}
                                 />
+                                {errors.cpf && (
+                                    <p className="mt-2 text-sm text-red-500">{errors.cpf}</p>
+                                )}
                             </div>
 
                             <div>
@@ -244,12 +354,21 @@ export default function DriversPage() {
                                     value={formData.cnh_category}
                                     onChange={handleChange}
                                     required
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
+                                        errors.cnh_category
+                                            ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                                            : "border-slate-200 focus:border-red-400 focus:ring-red-100"
+                                    }`}
                                 >
                                     <option value="C">C</option>
                                     <option value="D">D</option>
                                     <option value="E">E</option>
                                 </select>
+                                {errors.cnh_category && (
+                                    <p className="mt-2 text-sm text-red-500">
+                                        {errors.cnh_category}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -266,8 +385,15 @@ export default function DriversPage() {
                                     placeholder="(11) 99999-9999"
                                     value={formData.phone}
                                     onChange={handleChange}
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
+                                        errors.phone
+                                            ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                                            : "border-slate-200 focus:border-red-400 focus:ring-red-100"
+                                    }`}
                                 />
+                                {errors.phone && (
+                                    <p className="mt-2 text-sm text-red-500">{errors.phone}</p>
+                                )}
                             </div>
 
                             <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
@@ -403,16 +529,12 @@ export default function DriversPage() {
                                                                     : "bg-emerald-500 hover:bg-emerald-600"
                                                             }`}
                                                         >
-                                                            {driver.is_active
-                                                                ? "Inativar"
-                                                                : "Ativar"}
+                                                            {driver.is_active ? "Inativar" : "Ativar"}
                                                         </button>
 
                                                         {!driver.is_active && (
                                                             <button
-                                                                onClick={() =>
-                                                                    handleDelete(driver.id)
-                                                                }
+                                                                onClick={() => handleDelete(driver.id)}
                                                                 className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-600"
                                                             >
                                                                 Excluir
