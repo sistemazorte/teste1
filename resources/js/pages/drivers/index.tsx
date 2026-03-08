@@ -32,6 +32,16 @@ type FormErrors = {
     general?: string;
 };
 
+type ConfirmModalData = {
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    onConfirm: () => void;
+    type: 'toggle' | 'delete';
+};
+
 const initialFormData: DriverFormData = {
     name: "",
     cpf: "",
@@ -99,10 +109,25 @@ export default function DriversPage() {
     const [statusFilter, setStatusFilter] = useState("all");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<FormErrors>({});
+    const [successMessage, setSuccessMessage] = useState("");
+    const [errorMessage, setErrorMessage] = useState("");
+    const [confirmModal, setConfirmModal] = useState<ConfirmModalData>({
+        isOpen: false,
+        title: "",
+        message: "",
+        confirmText: "",
+        cancelText: "",
+        onConfirm: () => {},
+        type: 'toggle',
+    });
 
     async function loadDrivers() {
-        const data = await getDrivers();
-        setDrivers(data);
+        try {
+            const data = await getDrivers();
+            setDrivers(data);
+        } catch {
+            setErrorMessage("Não foi possível carregar os motoristas.");
+        }
     }
 
     useEffect(() => {
@@ -137,12 +162,16 @@ export default function DriversPage() {
             [name]: "",
             general: "",
         }));
+
+        setErrorMessage("");
+        setSuccessMessage("");
     }
 
     function resetForm() {
         setFormData(initialFormData);
         setEditingDriverId(null);
         setErrors({});
+        setErrorMessage("");
     }
 
     async function handleSubmit(event: FormEvent) {
@@ -152,25 +181,64 @@ export default function DriversPage() {
 
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
+            setErrorMessage("Corrija os campos destacados antes de continuar.");
+            setSuccessMessage("");
             return;
         }
 
         setIsSubmitting(true);
         setErrors({});
+        setErrorMessage("");
+        setSuccessMessage("");
 
         try {
-            if (editingDriverId) {
-                await updateDriver(editingDriverId, formData);
-            } else {
-                await createDriver(formData);
+            const response = editingDriverId
+                ? await updateDriver(editingDriverId, formData)
+                : await createDriver(formData);
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if (response.status === 422 && data.errors) {
+                    const apiErrors: FormErrors = {};
+
+                    if (data.errors.name) {
+                        apiErrors.name = data.errors.name[0];
+                    }
+
+                    if (data.errors.cpf) {
+                        apiErrors.cpf = data.errors.cpf[0];
+                    }
+
+                    if (data.errors.cnh_category) {
+                        apiErrors.cnh_category = data.errors.cnh_category[0];
+                    }
+
+                    if (data.errors.phone) {
+                        apiErrors.phone = data.errors.phone[0];
+                    }
+
+                    setErrors(apiErrors);
+                    setErrorMessage("Existem campos inválidos. Revise os dados informados.");
+                } else {
+                    setErrorMessage(data.message || "Não foi possível salvar o motorista.");
+                }
+
+                return;
             }
+
+            const wasEditing = editingDriverId !== null;
 
             resetForm();
             await loadDrivers();
+
+            setSuccessMessage(
+                wasEditing
+                    ? "Motorista atualizado com sucesso."
+                    : "Motorista cadastrado com sucesso."
+            );
         } catch {
-            setErrors({
-                general: "Não foi possível salvar o motorista. Verifique os dados e tente novamente.",
-            });
+            setErrorMessage("Não foi possível conectar com a API. Verifique o servidor.");
         } finally {
             setIsSubmitting(false);
         }
@@ -186,22 +254,102 @@ export default function DriversPage() {
             is_active: driver.is_active,
         });
         setErrors({});
+        setErrorMessage("");
+        setSuccessMessage("");
     }
 
-    async function handleToggle(id: number) {
-        const confirmToggle = confirm("Deseja alterar o status deste motorista?");
-        if (!confirmToggle) return;
+    function openToggleModal(id: number) {
+        const driver = drivers.find(d => d.id === id);
+        if (!driver) return;
 
-        await toggleDriver(id);
-        await loadDrivers();
+        const action = driver.is_active ? "inativar" : "ativar";
+        
+        setConfirmModal({
+            isOpen: true,
+            title: `${action === "inativar" ? "Inativar" : "Ativar"} motorista`,
+            message: `Deseja realmente ${action} o motorista "${driver.name}"?`,
+            confirmText: action === "inativar" ? "Sim, inativar" : "Sim, ativar",
+            cancelText: "Cancelar",
+            onConfirm: () => executeToggle(id),
+            type: 'toggle',
+        });
     }
 
-    async function handleDelete(id: number) {
-        const confirmDelete = confirm("Deseja realmente excluir este motorista?");
-        if (!confirmDelete) return;
+    function openDeleteModal(id: number) {
+        const driver = drivers.find(d => d.id === id);
+        if (!driver) return;
 
-        await deleteDriver(id);
-        await loadDrivers();
+        setConfirmModal({
+            isOpen: true,
+            title: "Excluir motorista",
+            message: `Deseja realmente excluir o motorista "${driver.name}"? Esta ação não pode ser desfeita.`,
+            confirmText: "Sim, excluir",
+            cancelText: "Cancelar",
+            onConfirm: () => executeDelete(id),
+            type: 'delete',
+        });
+    }
+
+    function closeModal() {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+    }
+
+    async function executeToggle(id: number) {
+        const driver = drivers.find(d => d.id === id);
+        if (!driver) return;
+
+        const action = driver.is_active ? "inativar" : "ativar";
+        
+        setErrorMessage("");
+        setSuccessMessage("");
+
+        try {
+            const response = await toggleDriver(id);
+            const data = await response.json();
+
+            if (!response.ok) {
+                setErrorMessage(
+                    data.message || `Não foi possível ${action} o motorista.`
+                );
+                closeModal();
+                return;
+            }
+
+            await loadDrivers();
+            setSuccessMessage(
+                data.message || `Motorista ${action}do com sucesso.`
+            );
+            closeModal();
+        } catch {
+            setErrorMessage("Não foi possível conectar com a API. Verifique o servidor.");
+            closeModal();
+        }
+    }
+
+    async function executeDelete(id: number) {
+        const driver = drivers.find(d => d.id === id);
+        if (!driver) return;
+
+        setErrorMessage("");
+        setSuccessMessage("");
+
+        try {
+            const response = await deleteDriver(id);
+            const data = await response.json();
+
+            if (!response.ok) {
+                setErrorMessage(data.message || "Não foi possível excluir o motorista.");
+                closeModal();
+                return;
+            }
+
+            await loadDrivers();
+            setSuccessMessage(data.message || "Motorista excluído com sucesso.");
+            closeModal();
+        } catch {
+            setErrorMessage("Não foi possível conectar com a API. Verifique o servidor.");
+            closeModal();
+        }
     }
 
     const filteredDrivers = useMemo(() => {
@@ -226,6 +374,73 @@ export default function DriversPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
+            {/* Modal de confirmação */}
+            {confirmModal.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl animate-fade-in">
+                        <div className={`p-6 ${
+                            confirmModal.type === 'delete' 
+                                ? 'border-b border-red-100' 
+                                : 'border-b border-amber-100'
+                        }`}>
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${
+                                    confirmModal.type === 'delete'
+                                        ? 'bg-red-100'
+                                        : confirmModal.title.includes('Inativar')
+                                            ? 'bg-amber-100'
+                                            : 'bg-emerald-100'
+                                }`}>
+                                    {confirmModal.type === 'delete' ? (
+                                        <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    ) : confirmModal.title.includes('Inativar') ? (
+                                        <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-900">
+                                    {confirmModal.title}
+                                </h3>
+                            </div>
+                        </div>
+                        
+                        <div className="p-6">
+                            <p className="text-slate-600">
+                                {confirmModal.message}
+                            </p>
+                        </div>
+
+                        <div className="flex gap-3 p-6 pt-0">
+                            <button
+                                onClick={closeModal}
+                                className="flex-1 rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 transition hover:bg-slate-50"
+                            >
+                                {confirmModal.cancelText}
+                            </button>
+                            <button
+                                onClick={confirmModal.onConfirm}
+                                className={`flex-1 rounded-xl px-4 py-3 font-semibold text-white transition ${
+                                    confirmModal.type === 'delete'
+                                        ? 'bg-red-500 hover:bg-red-600'
+                                        : confirmModal.title.includes('Inativar')
+                                            ? 'bg-amber-500 hover:bg-amber-600'
+                                            : 'bg-emerald-500 hover:bg-emerald-600'
+                                }`}
+                            >
+                                {confirmModal.confirmText}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="mx-auto max-w-7xl px-6 py-10">
                 <section className="overflow-hidden rounded-3xl bg-gradient-to-r from-red-600 via-red-500 to-emerald-500 px-8 py-10 text-white shadow-xl">
                     <div className="max-w-3xl">
@@ -282,13 +497,21 @@ export default function DriversPage() {
                             </p>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            {errors.general && (
-                                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-                                    {errors.general}
+                        <div className="mb-4 space-y-3">
+                            {successMessage && (
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                                    {successMessage}
                                 </div>
                             )}
 
+                            {errorMessage && (
+                                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                                    {errorMessage}
+                                </div>
+                            )}
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label
                                     htmlFor="name"
@@ -304,10 +527,11 @@ export default function DriversPage() {
                                     value={formData.name}
                                     onChange={handleChange}
                                     required
-                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${errors.name
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
+                                        errors.name
                                             ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                                             : "border-slate-200 focus:border-red-400 focus:ring-red-100"
-                                        }`}
+                                    }`}
                                 />
                                 {errors.name && (
                                     <p className="mt-2 text-sm text-red-500">{errors.name}</p>
@@ -329,10 +553,11 @@ export default function DriversPage() {
                                     value={formData.cpf}
                                     onChange={handleChange}
                                     required
-                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${errors.cpf
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
+                                        errors.cpf
                                             ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                                             : "border-slate-200 focus:border-red-400 focus:ring-red-100"
-                                        }`}
+                                    }`}
                                 />
                                 {errors.cpf && (
                                     <p className="mt-2 text-sm text-red-500">{errors.cpf}</p>
@@ -352,10 +577,11 @@ export default function DriversPage() {
                                     value={formData.cnh_category}
                                     onChange={handleChange}
                                     required
-                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${errors.cnh_category
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
+                                        errors.cnh_category
                                             ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                                             : "border-slate-200 focus:border-red-400 focus:ring-red-100"
-                                        }`}
+                                    }`}
                                 >
                                     <option value="A">A</option>
                                     <option value="B">B</option>
@@ -384,10 +610,11 @@ export default function DriversPage() {
                                     placeholder="(11) 99999-9999"
                                     value={formData.phone}
                                     onChange={handleChange}
-                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${errors.phone
+                                    className={`w-full rounded-xl border bg-white px-4 py-3 text-slate-900 outline-none transition focus:ring-4 ${
+                                        errors.phone
                                             ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                                             : "border-slate-200 focus:border-red-400 focus:ring-red-100"
-                                        }`}
+                                    }`}
                                 />
                                 {errors.phone && (
                                     <p className="mt-2 text-sm text-red-500">{errors.phone}</p>
@@ -414,8 +641,8 @@ export default function DriversPage() {
                                     {isSubmitting
                                         ? "Salvando..."
                                         : editingDriverId
-                                            ? "Atualizar motorista"
-                                            : "Cadastrar motorista"}
+                                          ? "Atualizar motorista"
+                                          : "Cadastrar motorista"}
                                 </button>
 
                                 {editingDriverId && (
@@ -501,10 +728,11 @@ export default function DriversPage() {
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <span
-                                                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${driver.is_active
+                                                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                                            driver.is_active
                                                                 ? "bg-emerald-100 text-emerald-700"
                                                                 : "bg-red-100 text-red-700"
-                                                            }`}
+                                                        }`}
                                                     >
                                                         {driver.is_active ? "Ativo" : "Inativo"}
                                                     </span>
@@ -519,18 +747,19 @@ export default function DriversPage() {
                                                         </button>
 
                                                         <button
-                                                            onClick={() => handleToggle(driver.id)}
-                                                            className={`rounded-lg px-3 py-2 text-xs font-semibold text-white transition ${driver.is_active
+                                                            onClick={() => openToggleModal(driver.id)}
+                                                            className={`rounded-lg px-3 py-2 text-xs font-semibold text-white transition ${
+                                                                driver.is_active
                                                                     ? "bg-amber-500 hover:bg-amber-600"
                                                                     : "bg-emerald-500 hover:bg-emerald-600"
-                                                                }`}
+                                                            }`}
                                                         >
                                                             {driver.is_active ? "Inativar" : "Ativar"}
                                                         </button>
 
                                                         {!driver.is_active && (
                                                             <button
-                                                                onClick={() => handleDelete(driver.id)}
+                                                                onClick={() => openDeleteModal(driver.id)}
                                                                 className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-600"
                                                             >
                                                                 Excluir
@@ -556,6 +785,22 @@ export default function DriversPage() {
                     </div>
                 </section>
             </div>
+
+            <style>{`
+                @keyframes fade-in {
+                    from {
+                        opacity: 0;
+                        transform: scale(0.95);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: scale(1);
+                    }
+                }
+                .animate-fade-in {
+                    animation: fade-in 0.2s ease-out;
+                }
+            `}</style>
         </div>
     );
 }
