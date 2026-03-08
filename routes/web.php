@@ -1,9 +1,11 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
+use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+
+Route::redirect('/', '/drivers');
 
 Route::get('/drivers', function () {
     return Inertia::render('drivers/index');
