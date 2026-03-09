@@ -4,7 +4,7 @@
     "builder": "RAILPACK"
   },
   "deploy": {
-    "startCommand": "/start-container.sh",
+    "startCommand": "php artisan migrate --force && /start-container.sh",
     "healthcheckPath": "/"
   }
 }
