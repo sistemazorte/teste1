@@ -1,4 +1,4 @@
-const API_URL = "http://127.0.0.1:8080/api/drivers";
+const API_URL = "https://teste1-production-3fde.up.railway.app/api/drivers";
 
 export async function getDrivers() {
     const response = await fetch(API_URL);
